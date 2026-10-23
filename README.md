@@ -1,185 +1,237 @@
 # Deam | Smart Society Gate Management System
 
-A local-first, AI-assisted visitor access system for residential societies. Deam is designed to combine visitor verification, resident approvals, an administrative dashboard, audit logging, and optional Arduino-controlled gate hardware in one privacy-conscious system.
+A local-first, AI-assisted visitor access system for residential societies. The project is designed to combine visitor verification, resident approvals, administrative tools, audit history, and optional Arduino-controlled gate hardware on a local network.
 
-> **Development status:** Early scaffold / Phase 0 in progress. The repository currently contains the initial health endpoint and mock gate-controller interface. Face verification, authentication, database-backed visitor workflows, the frontend, and real hardware integration are planned work and should not be considered implemented yet.
+> **Status: Phase 0 foundation committed.** The repository now contains configuration, a FastAPI backend, SQLAlchemy account model, Alembic initial migration, password hashing and JWT helpers, role-checking dependencies, liveness/readiness endpoints, a mock gate-controller interface, seed-account tooling, and initial tests. Visitor workflows, face matching, PIN verification, frontend screens, and physical serial integration are not implemented yet.
 
-## Project goals
+## Core principles
 
-- **Verify visitors locally:** Use PIN checks and CPU-based face verification with OpenCV models, without relying on paid cloud AI APIs.
-- **Support safe access decisions:** Registered visitors may be automatically allowed only when configured checks pass; unknown guests can be sent to residents for approval.
-- **Keep gate control on the backend:** The frontend never sends hardware commands directly. Only the backend decision engine should be able to request gate operations.
-- **Fail closed:** If verification, the database, the network, or the serial connection fails, the safe outcome is to keep the gate closed.
-- **Run on a local network:** Host the application on a laptop or Raspberry Pi and let the kiosk, resident phones, and admin browser connect over the LAN.
-- **Support hardware-free development:** A mock gate controller enables development and testing before the Arduino/servo/relay hardware is ready.
+- **Local-first:** run on a laptop or Raspberry Pi and serve kiosk, resident, and admin browsers over the local network.
+- **Fail-closed:** if verification, the database, network, or hardware communication fails, the gate must remain closed.
+- **Backend-controlled hardware:** the frontend never sends commands to Arduino. Only the future backend decision engine may request gate operations.
+- **Hardware-free development:** the mock controller supports early testing without an Arduino attached.
+- **Privacy-aware:** biometric data and visitor snapshots require consent, access controls, retention limits, and deletion workflows.
+- **Open and student-friendly:** free/open-source components, documented setup, tests, and staged implementation.
 
-## Planned capabilities
+## Planned functionality
 
 ### Visitor access
-- Registered visitors such as household staff and regular visitors
-- Static or daily PIN credentials
-- Face-image quality checks and local face matching
-- Optional visitor schedules and validity windows
-- Guest entry requests with resident approval, rejection, and expiry
-- Delivery passes as a later/stretch feature
+- Registered visitors with static or daily PIN credentials
+- Local CPU face verification using OpenCV YuNet and SFace models
+- Visitor schedules and validity windows
+- Guest requests sent to residents for approval, rejection, or expiry
+- Delivery passes as a later-phase feature
 
-### Resident and admin experience
-- Resident dashboard for pending requests and visit history
+### Resident and admin tools
+- Resident dashboard, pending requests, and visit history
 - Visitor enrolment and credential management
-- Administrative settings, audit history, and CSV export
-- Live request updates through WebSockets
+- Admin settings, audit viewer, and CSV export
+- Real-time updates through WebSockets
 - Optional Telegram notifications, disabled by default
 
-### Hardware integration
-- Mock and serial gate-controller implementations behind one interface
+### Gate hardware
+- Mock and serial implementations behind one GateController interface
 - Configurable serial port and baud rate
-- A documented Arduino communication protocol
-- A short, bounded gate-open command and hardware-side automatic closing
-- Optional message authentication for the hardware protocol
+- Planned Arduino protocol with acknowledgements, timeout handling, replay protection, heartbeat, and hardware-side auto-close
 
 ## Architecture
 
 ```text
- Kiosk browser       Resident phone       Admin browser
-      |                    |                    |
-      +--------- HTTPS / WebSocket over LAN ----+
-                           |
-                    FastAPI backend
-                           |
-       +-------------------+--------------------+
-       |                   |                    |
-  Decision engine      Face / PIN services   Database
-       |
-  Gate controller
-   /          \
- Mock mode   Serial mode
-                 |
-             USB serial
-                 |
-          Arduino + servo/relay
+Kiosk browser     Resident phone     Admin browser
+      \                 |                  /
+       +---------- local network ----------+
+                         |
+                    FastAPI API
+                         |
+          +--------------+-------------+
+          |              |             |
+      Auth / roles   Future decision  SQLAlchemy
+                         engine          |
+                          |        SQLite / MySQL 8
+                     GateController
+                      /          \
+                   Mock        Serial (planned)
+                                  |
+                             Arduino + servo/relay
 ```
 
-**Security boundary:** Only the backend decision engine may request a gate operation. UI actions, face-model results, and optional language-model output must never independently authorize opening the gate.
+**Safety boundary:** the browser cannot open the gate. The future decision engine is the only component allowed to call a gate controller. Optional AI assistance may extract delivery details later, but it must never decide whether the gate opens.
 
-## Technology stack
+## Technology
 
-| Layer | Planned technology |
+| Layer | Intended technology |
 |---|---|
-| Backend API | Python 3.11+, FastAPI, Uvicorn, Pydantic v2 |
-| Persistence | SQLAlchemy 2.x, Alembic; SQLite for development/tests and MySQL 8 for production |
-| Authentication | JWT, role-based authorization, Argon2id or bcrypt password hashing |
-| Face verification | OpenCV with YuNet face detection and SFace recognition ONNX models |
-| Hardware | pyserial; Arduino with servo or relay |
-| Real-time updates | FastAPI WebSockets |
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
-| Testing and quality | pytest, httpx, Ruff; frontend component and end-to-end tests planned |
-| Optional integrations | Local Ollama for extracting delivery details and Telegram notifications, both feature-flagged |
+| Backend | Python 3.11+, FastAPI, Uvicorn, Pydantic v2 |
+| Data | SQLAlchemy 2.x, Alembic, SQLite for development/tests, MySQL 8 for deployment |
+| Authentication | JWT bearer tokens, Argon2id password hashing, role dependencies |
+| Face AI | OpenCV with YuNet detector and SFace recognizer ONNX models |
+| Hardware | pyserial and Arduino servo/relay |
+| Real-time | FastAPI WebSockets |
+| Frontend (planned) | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Quality | pytest, httpx, Ruff |
+| Optional integrations | Local Ollama and Telegram behind feature flags |
 
-The stack above describes the intended architecture, not a claim that every dependency or feature is already present in the repository.
+The table describes the intended full project stack. Only the Phase 0 subset listed in the status section is currently implemented.
 
-## Safety, security, and privacy
+## Phase 0: Foundation
 
-- **Fail-closed behavior:** errors and timeouts must never result in an open command.
-- **Least privilege:** gate-controller access is restricted to the decision engine.
-- **Credential protection:** never log PINs or secrets; store password hashes and protect visitor secrets.
-- **Abuse prevention:** apply rate limits to failed PIN attempts and login attempts.
-- **Data minimization:** face embeddings and snapshots are personal data. Provide consent information, access controls, retention rules, and deletion workflows.
-- **Honest biometric limitations:** face matching without liveness detection can be fooled by a printed photo or screen. Resident approval and conservative defaults reduce risk but do not eliminate spoofing.
-- **Secrets:** keep real credentials in local environment files; commit only safe example values.
+Implemented in the repository:
+- Typed environment configuration and safe example settings
+- FastAPI app, CORS allowlist, and startup/shutdown logging
+- SQLAlchemy engine/session lifecycle and initial User model
+- Alembic migration for the users table
+- Argon2 password hashing and short-lived JWT helper functions
+- Authentication login endpoint and role-checking dependencies
+- Liveness and database-readiness endpoints
+- Mock gate interface and failure simulation
+- Seed script requiring passwords to be supplied via environment variables
+- Initial health, authentication, and mock-controller tests
+- MySQL 8 Docker Compose service
 
-This is a student project and should not be used to control a real entrance until the threat model, hardware safeguards, failure behavior, and end-to-end tests have been reviewed.
+Still to do in later phases: login rate limiting, audit events, visitor and PIN models, decision engine, face model setup, kiosk/resident UI, and real hardware serial communication.
 
-## Project roadmap
+## Quick start: Windows, Linux, or Codespaces
 
-- [ ] **Phase 0: Foundation**: configuration, database setup and models, migrations, seed data, health endpoint, authentication/roles, logging, mock gate controller, and MySQL development configuration.
-- [ ] **Phase 1: Core MVP**: PIN and face services, decision engine, kiosk endpoints, resident approval flow, expiry handling, WebSockets, audit logs, rate limiting, and snapshots.
-- [ ] **Phase 2: Frontend MVP**: login, kiosk flow, resident dashboard, visitor management, and API integration.
-- [ ] **Phase 3: Hardware integration**: serial controller, protocol, Arduino reference sketch, heartbeat/reconnect behavior, and protocol tests.
-- [ ] **Phase 4: Admin and polish**: passes, settings, audit viewer, CSV export, responsive and error states.
-- [ ] **Phase 5: Optional extensions**: local LLM extraction, Telegram, liveness model, calibration tools, benchmarks, and end-to-end tests.
-
-## Getting started
-
-### Prerequisites
+### 1. Prerequisites
 
 - Python 3.11 or newer
 - Git
-- A modern browser
-- Node.js/npm when the frontend is added
-- Arduino hardware only for real serial mode; the planned mock mode is intended for development without hardware
+- Internet access for installing Python dependencies
+- Docker only if you want to run MySQL; SQLite is the default for development
 
-### Run the current backend scaffold
+### 2. Create and activate a virtual environment
 
 From the repository root:
 
-```bash
-cd backend
-python -m venv .venv
-```
-
-Activate the environment:
-
 **Windows PowerShell**
 ```powershell
+cd backend
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-**Ubuntu / macOS / GitHub Codespaces**
+**Ubuntu / Codespaces**
 ```bash
+cd backend
+python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-Install the currently listed backend dependencies and start the API:
+### 3. Install dependencies and configure environment
 
 ```bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+Copy the example settings file:
+
+**PowerShell**
+```powershell
+Copy-Item .env.example .env
+```
+
+**Ubuntu / Codespaces**
+```bash
+cp .env.example .env
+```
+
+Before using the app beyond local development, replace JWT_SECRET with a long random secret. Never commit .env or real credentials. SQLite is used by default.
+
+### 4. Create the database schema
+
+From the backend directory, with the virtual environment active:
+
+```bash
+alembic upgrade head
+```
+
+### 5. Seed development accounts
+
+Set two passwords of at least 12 characters. Do not paste real or reused passwords into source files.
+
+**PowerShell**
+```powershell
+$env:SEED_ADMIN_PASSWORD = "replace-with-a-unique-admin-password"
+$env:SEED_RESIDENT_PASSWORD = "replace-with-a-unique-resident-password"
+python scripts/seed.py
+```
+
+**Ubuntu / Codespaces**
+```bash
+export SEED_ADMIN_PASSWORD='replace-with-a-unique-admin-password'
+export SEED_RESIDENT_PASSWORD='replace-with-a-unique-resident-password'
+python scripts/seed.py
+```
+
+The seed script creates admin@example.test and resident@example.test unless you override the email variables. These are example identities, not preconfigured passwords. Use the same passwords you supplied above when testing login.
+
+### 6. Start the API
+
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Open `http://127.0.0.1:8000/health`. In GitHub Codespaces, open the forwarded port 8000 from the **Ports** panel. The health endpoint is the current smoke test; it does not mean the complete visitor-management system is ready.
+Open:
+- `http://127.0.0.1:8000/health` for liveness
+- `http://127.0.0.1:8000/health/ready` for database readiness
+- `http://127.0.0.1:8000/docs` for the interactive API docs
 
-### Tests
+In GitHub Codespaces, open the **Ports** panel and use the forwarded port 8000 URL. Keep it private; do not expose development authentication endpoints publicly.
 
-From the `backend/` directory, with dependencies installed:
+### 7. Run tests and lint
+
+From the backend directory:
 
 ```bash
 pytest
+ruff check app scripts tests
 ```
 
-The initial scaffold includes a health endpoint test. More service, API, security, and hardware-protocol tests will be added as the corresponding phases are implemented.
+The repository includes initial tests for health/readiness, login behavior, and mock-gate success/failure. Run them in your environment after installing dependencies; CI/test execution has not been verified from this chat.
 
-## Repository layout
+## Optional MySQL 8
 
-```text
-Deam/
-├── backend/
-│   ├── app/
-│   │   ├── gate/          # Gate controller interface and mock controller
-│   │   └── main.py        # Current FastAPI app and health endpoint
-│   ├── storage/
-│   │   └── snapshots/
-│   ├── tests/
-│   ├── .env.example
-│   └── requirements.txt
-├── docs/
-│   └── ARCHITECTURE.md
-├── frontend/              # Frontend setup placeholder
-├── hardware-spec/         # Hardware protocol placeholder
-└── README.md
+Docker Compose binds MySQL to localhost only. Set both MYSQL_PASSWORD and MYSQL_ROOT_PASSWORD before starting it.
+
+**PowerShell**
+```powershell
+$env:MYSQL_PASSWORD = "replace-with-a-unique-db-password"
+$env:MYSQL_ROOT_PASSWORD = "replace-with-a-unique-root-password"
+docker compose up -d mysql
 ```
 
-The tree will grow as each roadmap phase is implemented.
+**Ubuntu / Codespaces**
+```bash
+export MYSQL_PASSWORD='replace-with-a-unique-db-password'
+export MYSQL_ROOT_PASSWORD='replace-with-a-unique-root-password'
+docker compose up -d mysql
+```
 
-## Contribution workflow
+Then set DATABASE_URL in backend/.env to a MySQL URL such as `mysql+pymysql://deam_app:URL_ENCODED_PASSWORD@127.0.0.1:3306/deam` and run `alembic upgrade head` again. URL-encode special characters in the password. SQLite is simpler for the initial phase.
 
-1. Work in a focused branch for one feature or phase.
-2. Keep hardware access behind the backend decision engine and gate-controller interface.
-3. Add tests for success paths, denied requests, timeouts, and failure cases.
-4. Never commit real secrets, visitor photographs, biometric data, or production database files.
-5. Update documentation when behavior, setup commands, or security assumptions change.
+## Roadmap
 
-## Project principles
+- [x] **Phase 0: Foundation** - configuration, database foundation and migration, seed script, health endpoints, authentication helpers, roles, logging, mock gate interface, MySQL compose, initial tests
+- [ ] **Phase 1: Core MVP** - PIN and face services, decision engine, kiosk endpoints, resident approvals, expiry sweeper, WebSockets, audit trail, rate limits, snapshots
+- [ ] **Phase 2: Frontend MVP** - login, kiosk flow, resident dashboard, visitor manager, API integration
+- [ ] **Phase 3: Hardware integration** - serial controller, protocol, Arduino reference sketch, heartbeat/reconnect, protocol tests
+- [ ] **Phase 4: Admin and polish** - passes, settings, audit viewer, CSV export, responsive and error states
+- [ ] **Phase 5: Optional extensions** - local LLM parsing, Telegram, liveness model, calibration, benchmarks, end-to-end tests
+
+## Security and privacy limitations
+
+- Face matching without liveness detection can be fooled by a printed photo or screen. A future implementation must disclose this limitation and use conservative approval defaults.
+- Six-digit PINs require strict rate limiting and a mandatory second factor; hashing alone does not prevent brute force.
+- Visitor snapshots and face embeddings are personal data. The completed system must implement consent, retention, deletion, and access-control workflows.
+- The current Phase 0 backend is a development foundation, **not a production access-control system**. Do not connect it to a real gate until the decision engine, serial protocol, failure behavior, and security tests are implemented and reviewed.
+
+## Contributing
+
+1. Work in a focused branch and keep changes small enough to review.
+2. Add tests for successful, denied, and failure cases.
+3. Never commit .env files, credentials, real visitor photos, embeddings, or database files.
+4. Keep all hardware access behind the backend decision engine.
+5. Update documentation when setup commands, behavior, or security assumptions change.
 
 **Local-first · Privacy-aware · Fail-closed · Testable without hardware · Built in phases**
-
