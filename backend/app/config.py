@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     snapshot_retention_days: int = 30
     mock_fail_rate: float = 0.0
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self):
+        if self.app_env.strip().lower() == "production":
+            if not self.jwt_secret or self.jwt_secret == "dev-only-change-me":
+                raise ValueError("JWT_SECRET must be set to a unique production secret")
+            if not self.data_encryption_key:
+                raise ValueError("DATA_ENCRYPTION_KEY is required in production")
+            if not self.kiosk_api_key:
+                raise ValueError("KIOSK_API_KEY is required in production")
+        return self
 
     @field_validator("gate_mode")
     @classmethod
