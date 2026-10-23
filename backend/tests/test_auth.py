@@ -9,6 +9,7 @@ def test_login_succeeds(client):
     db.add(User(email="resident@example.test", password_hash=hash_password("long-test-password"), role="resident", flat_number="A-101", is_active=True))
     db.commit()
     db.close()
+    session_generator.close()
     response = client.post("/api/v1/auth/login", json={"email": "resident@example.test", "password": "long-test-password"})
     assert response.status_code == 200
     assert response.json()["user"]["role"] == "resident"
