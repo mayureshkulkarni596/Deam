@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Literal
 from sqlalchemy import select
@@ -25,8 +26,8 @@ class GateRequestPublic(BaseModel):
     deny_reason: str | None
     face_mismatch: bool
     decision_source: str
-    created_at: object
-    expires_at: object | None
+    created_at: datetime
+    expires_at: datetime | None
 
 def _owned_request(db: Session, request_id: str, user):
     request = db.get(GateRequest, request_id)
