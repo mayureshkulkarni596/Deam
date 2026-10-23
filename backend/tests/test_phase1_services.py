@@ -57,3 +57,42 @@ def test_decision_fails_closed_for_bad_pin_or_face():
         ).reason
         == "FACE_MISMATCH"
     )
+
+def test_decision_normalizes_naive_visitor_validity_datetimes():
+    settings = SimpleNamespace(face_match_threshold=0.363, app_timezone="Asia/Kolkata")
+    visitor = SimpleNamespace(
+        status="ACTIVE",
+        valid_from=datetime.fromisoformat("2026-10-23T10:00:00"),
+        valid_until=datetime.fromisoformat("2026-10-23T12:00:00"),
+        outside_schedule_action="ASK",
+        schedule_json=None,
+        auto_open=True,
+    )
+    # Naive timestamps from SQLite are treated as UTC consistently.
+    result = evaluate_visit(
+        visitor,
+        True,
+        0.9,
+        datetime.fromisoformat("2026-10-23T10:30:00+00:00"),
+        settings,
+    )
+    assert result.action == "AUTO_OPEN"
+
+    before_start = evaluate_visit(
+        visitor,
+        True,
+        0.9,
+        datetime.fromisoformat("2026-10-23T09:00:00+00:00"),
+        settings,
+    )
+    assert before_start.reason == "VISITOR_NOT_YET_VALID"
+
+    after_end = evaluate_visit(
+        visitor,
+        True,
+        0.9,
+        datetime.fromisoformat("2026-10-23T13:00:00+00:00"),
+        settings,
+    )
+    assert after_end.reason == "VISITOR_EXPIRED"
+
