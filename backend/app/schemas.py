@@ -1,10 +1,13 @@
 from datetime import datetime
 from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+
 
 class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -14,11 +17,13 @@ class UserPublic(BaseModel):
     flat_number: str | None
     is_active: bool
 
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
     user: UserPublic
+
 
 class VisitorCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
@@ -41,6 +46,7 @@ class VisitorCreate(BaseModel):
         if self.credential_mode == "DAILY_PIN" and self.pin is not None:
             raise ValueError("PIN must be omitted for DAILY_PIN")
         return self
+
 
 class VisitorPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)

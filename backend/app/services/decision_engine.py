@@ -1,21 +1,32 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
+
 from sqlalchemy import update
 from sqlalchemy.orm import Session
+
 from app.config import get_settings
 from app.gate.base import GateController
 from app.models import GateRequest, Visitor
 from app.services.audit import record_audit
 from app.services.schedule import is_within_schedule
 
+
 @dataclass(frozen=True)
 class Decision:
     action: str
     reason: str | None = None
 
-def evaluate_visit(visitor: Visitor | None, pin_ok: bool, face_score: float | None,
-                   now: datetime, settings, *, face_quality_ok: bool = True) -> Decision:
+
+def evaluate_visit(
+    visitor: Visitor | None,
+    pin_ok: bool,
+    face_score: float | None,
+    now: datetime,
+    settings,
+    *,
+    face_quality_ok: bool = True,
+) -> Decision:
     if not pin_ok:
         return Decision("DENY", "PIN_INVALID")
     if visitor is None or visitor.status != "ACTIVE":
@@ -28,38 +39,78 @@ def evaluate_visit(visitor: Visitor | None, pin_ok: bool, face_score: float | No
         return Decision("DENY", "FACE_MISMATCH")
     local_now = now.astimezone(ZoneInfo(settings.app_timezone))
     if not is_within_schedule(visitor.schedule_json, local_now):
-        return Decision("DENY" if visitor.outside_schedule_action == "DENY" else "NEEDS_APPROVAL", "OUTSIDE_SCHEDULE")
+        return Decision(
+            "DENY" if visitor.outside_schedule_action == "DENY" else "NEEDS_APPROVAL",
+            "OUTSIDE_SCHEDULE",
+        )
     return Decision("AUTO_OPEN") if visitor.auto_open else Decision("NEEDS_APPROVAL")
 
-def transition_request(db: Session, request_id: str, *, expected: str, new_status: str,
-                       actor_type: str, actor_id: str | int | None, source: str,
-                       reason: str | None = None) -> bool:
-    allowed = {"PENDING": {"APPROVED", "REJECTED", "EXPIRED", "DENIED"},
-               "APPROVED": {"OPENING"}, "OPENING": {"OPENED", "FAILED"}}
+
+def transition_request(
+    db: Session,
+    request_id: str,
+    *,
+    expected: str,
+    new_status: str,
+    actor_type: str,
+    actor_id: str | int | None,
+    source: str,
+    reason: str | None = None,
+) -> bool:
+    allowed = {
+        "PENDING": {"APPROVED", "REJECTED", "EXPIRED", "DENIED"},
+        "APPROVED": {"OPENING"},
+        "OPENING": {"OPENED", "FAILED"},
+    }
     if new_status not in allowed.get(expected, set()):
         return False
-    now = datetime.now(timezone.utc)
-    result = db.execute(update(GateRequest).where(
-        GateRequest.id == request_id, GateRequest.status == expected
-    ).values(status=new_status, decision_source=source, deny_reason=reason, decided_at=now))
+    now = datetime.now(UTC)
+    result = db.execute(
+        update(GateRequest)
+        .where(GateRequest.id == request_id, GateRequest.status == expected)
+        .values(status=new_status, decision_source=source, deny_reason=reason, decided_at=now)
+    )
     if result.rowcount != 1:
         return False
-    record_audit(db, action=f"REQUEST_{new_status}", entity_type="gate_request",
-                 entity_id=request_id, actor_type=actor_type, actor_id=actor_id,
-                 details={"from": expected, "to": new_status, "reason": reason})
+    record_audit(
+        db,
+        action=f"REQUEST_{new_status}",
+        entity_type="gate_request",
+        entity_id=request_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        details={"from": expected, "to": new_status, "reason": reason},
+    )
     return True
 
-def approve_and_open(db: Session, request_id: str, actor_id: int, gate: GateController) -> GateRequest:
+
+def approve_and_open(
+    db: Session, request_id: str, actor_id: int, gate: GateController
+) -> GateRequest:
     request = db.get(GateRequest, request_id)
     if request is None:
         raise LookupError("REQUEST_NOT_FOUND")
-    if not transition_request(db, request_id, expected="PENDING", new_status="APPROVED",
-                              actor_type="USER", actor_id=actor_id, source="RESIDENT"):
+    if not transition_request(
+        db,
+        request_id,
+        expected="PENDING",
+        new_status="APPROVED",
+        actor_type="USER",
+        actor_id=actor_id,
+        source="RESIDENT",
+    ):
         db.rollback()
         raise ValueError("REQUEST_NOT_PENDING")
     db.commit()
-    if not transition_request(db, request_id, expected="APPROVED", new_status="OPENING",
-                              actor_type="USER", actor_id=actor_id, source="RESIDENT"):
+    if not transition_request(
+        db,
+        request_id,
+        expected="APPROVED",
+        new_status="OPENING",
+        actor_type="USER",
+        actor_id=actor_id,
+        source="RESIDENT",
+    ):
         db.rollback()
         raise ValueError("REQUEST_NOT_APPROVED")
     db.commit()
@@ -69,8 +120,16 @@ def approve_and_open(db: Session, request_id: str, actor_id: int, gate: GateCont
         result = None
     final = "OPENED" if result and result.success else "FAILED"
     reason = None if final == "OPENED" else (result.code if result else "GATE_COMMAND_ERROR")
-    if not transition_request(db, request_id, expected="OPENING", new_status=final,
-                              actor_type="SYSTEM", actor_id=None, source="SYSTEM", reason=reason):
+    if not transition_request(
+        db,
+        request_id,
+        expected="OPENING",
+        new_status=final,
+        actor_type="SYSTEM",
+        actor_id=None,
+        source="SYSTEM",
+        reason=reason,
+    ):
         db.rollback()
         raise RuntimeError("REQUEST_FINALIZATION_FAILED")
     db.commit()

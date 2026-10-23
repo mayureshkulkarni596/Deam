@@ -1,5 +1,6 @@
 from datetime import datetime, time
 
+
 def is_within_schedule(schedule: dict | None, now_local: datetime) -> bool:
     if not schedule:
         return True

@@ -50,9 +50,12 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version="0.2.0",
-    description="Local-first gate backend. Phase 1 core visitor workflow; hardware remains mock-only.",
+    description=(
+        "Local-first gate backend. Phase 1 core visitor workflow; hardware remains mock-only."
+    ),
     lifespan=lifespan,
 )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

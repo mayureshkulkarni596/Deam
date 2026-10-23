@@ -1,7 +1,21 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, Float, JSON, func
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db import Base
+
 
 class Visitor(Base):
     __tablename__ = "visitors"
@@ -19,13 +33,20 @@ class Visitor(Base):
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE", index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
 
 class FaceEmbedding(Base):
     __tablename__ = "face_embeddings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    visitor_id: Mapped[int] = mapped_column(ForeignKey("visitors.id", ondelete="CASCADE"), index=True)
+    visitor_id: Mapped[int] = mapped_column(
+        ForeignKey("visitors.id", ondelete="CASCADE"), index=True
+    )
     embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     model_version: Mapped[str] = mapped_column(String(80), nullable=False)
     quality_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

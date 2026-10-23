@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
+
 import cv2
 import numpy as np
+
 
 @dataclass(frozen=True)
 class FaceCheck:
@@ -10,9 +12,13 @@ class FaceCheck:
     embedding: np.ndarray | None = None
     quality_score: float = 0.0
 
+
 class FaceService:
     """CPU-only YuNet/SFace quality and embedding pipeline; missing models fail closed."""
-    def __init__(self, models_dir: str = "models", min_width: int = 80, min_sharpness: float = 60.0):
+
+    def __init__(
+        self, models_dir: str = "models", min_width: int = 80, min_sharpness: float = 60.0
+    ):
         root = Path(models_dir)
         self.detector_path = root / "face_detection_yunet_2023mar.onnx"
         self.recognizer_path = root / "face_recognition_sface_2021dec.onnx"
@@ -29,7 +35,9 @@ class FaceService:
         if not self.available:
             raise RuntimeError("FACE_MODEL_MISSING")
         if self._detector is None:
-            self._detector = cv2.FaceDetectorYN.create(str(self.detector_path), "", (width, height), 0.9, 0.3, 5000)
+            self._detector = cv2.FaceDetectorYN.create(
+                str(self.detector_path), "", (width, height), 0.9, 0.3, 5000
+            )
             self._recognizer = cv2.FaceRecognizerSF.create(str(self.recognizer_path), "")
         self._detector.setInputSize((width, height))
 
