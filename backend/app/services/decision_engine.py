@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import update
+from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -31,9 +31,16 @@ def evaluate_visit(
         return Decision("DENY", "PIN_INVALID")
     if visitor is None or visitor.status != "ACTIVE":
         return Decision("DENY", "VISITOR_REVOKED")
-    if visitor.valid_from and now < visitor.valid_from:
+    # SQLite may return naive datetimes for timezone-aware columns. Normalize
+    # both sides to UTC before comparing so boundary checks never raise TypeError.
+    now_utc = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
+
+    def as_utc(value: datetime) -> datetime:
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+    if visitor.valid_from and now_utc < as_utc(visitor.valid_from):
         return Decision("DENY", "VISITOR_NOT_YET_VALID")
-    if visitor.valid_until and now > visitor.valid_until:
+    if visitor.valid_until and now_utc > as_utc(visitor.valid_until):
         return Decision("DENY", "VISITOR_EXPIRED")
     if not face_quality_ok or face_score is None or face_score < settings.face_match_threshold:
         return Decision("DENY", "FACE_MISMATCH")
@@ -65,9 +72,14 @@ def transition_request(
     if new_status not in allowed.get(expected, set()):
         return False
     now = datetime.now(UTC)
+    conditions = [GateRequest.id == request_id, GateRequest.status == expected]
+    if expected == "PENDING" and new_status == "APPROVED":
+        # Approval must fail closed if the request expired, even if the periodic
+        # expiry worker has not processed it yet.
+        conditions.append(or_(GateRequest.expires_at.is_(None), GateRequest.expires_at > now))
     result = db.execute(
         update(GateRequest)
-        .where(GateRequest.id == request_id, GateRequest.status == expected)
+        .where(*conditions)
         .values(status=new_status, decision_source=source, deny_reason=reason, decided_at=now)
     )
     if result.rowcount != 1:
