@@ -1,4 +1,3 @@
-
 from app.db import get_db
 from app.models import User
 from app.security import hash_password

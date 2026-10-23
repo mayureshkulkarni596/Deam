@@ -1,6 +1,8 @@
+# ruff: noqa: B008
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
 from app.config import get_settings
 from app.db import get_db
 

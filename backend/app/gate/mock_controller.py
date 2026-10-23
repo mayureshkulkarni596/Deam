@@ -1,4 +1,5 @@
 import logging
+
 from app.gate.base import GateResult
 
 logger = logging.getLogger(__name__)

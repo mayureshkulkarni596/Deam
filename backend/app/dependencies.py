@@ -1,8 +1,10 @@
 from typing import Annotated
+
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+
 from app.db import get_db
 from app.models import User
 from app.security import decode_access_token
@@ -11,8 +13,15 @@ bearer_scheme = HTTPBearer(auto_error=False)
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)], db: DbSession) -> User:
-    unauthorized = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing access token", headers={"WWW-Authenticate": "Bearer"})
+def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: DbSession,
+) -> User:
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing access token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     if credentials is None:
         raise unauthorized
     try:
@@ -31,4 +40,5 @@ def require_roles(*roles: str):
         if user.role not in roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user
+
     return check_role
