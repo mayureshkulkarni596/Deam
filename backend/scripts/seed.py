@@ -1,9 +1,12 @@
 import os
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from sqlalchemy import select
-from app.db import Base, SessionLocal, engine
+
+from app.db import SessionLocal
 from app.models import User
 from app.security import hash_password
 
@@ -24,7 +27,6 @@ def main():
         raise SystemExit("Set SEED_ADMIN_PASSWORD and SEED_RESIDENT_PASSWORD before seeding.")
     if len(admin_password) < 12 or len(resident_password) < 12:
         raise SystemExit("Seed passwords must be at least 12 characters.")
-    Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         create_user(db, os.getenv("SEED_ADMIN_EMAIL", "admin@example.test"), admin_password, "admin")
         create_user(db, os.getenv("SEED_RESIDENT_EMAIL", "resident@example.test"), resident_password, "resident", os.getenv("SEED_RESIDENT_FLAT", "A-101"))
