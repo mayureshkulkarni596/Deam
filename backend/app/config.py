@@ -12,13 +12,23 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./gate.db"
     jwt_secret: str = "dev-only-change-me"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 30
+    jwt_expire_minutes: int = 720
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     log_level: str = "INFO"
     gate_mode: str = "mock"
     serial_port: str = "COM3"
     serial_baud: int = 115200
     gate_open_ttl_ms: int = 8000
+    data_encryption_key: str = ""
+    kiosk_api_key: str = ""
+    face_model_dir: str = "models"
+    face_match_threshold: float = 0.363
+    face_min_width_px: int = 80
+    face_min_sharpness: float = 60.0
+    pending_timeout_seconds: int = 120
+    allow_ask_resident_on_face_fail: bool = True
+    snapshot_retention_days: int = 30
+    mock_fail_rate: float = 0.0
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @field_validator("gate_mode")
@@ -41,6 +51,20 @@ class Settings(BaseSettings):
     def valid_gate_ttl(cls, value: int) -> int:
         if not 1000 <= value <= 15000:
             raise ValueError("GATE_OPEN_TTL_MS must be 1000..15000")
+        return value
+
+    @field_validator("face_match_threshold")
+    @classmethod
+    def valid_face_threshold(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("FACE_MATCH_THRESHOLD must be between 0 and 1")
+        return value
+
+    @field_validator("mock_fail_rate")
+    @classmethod
+    def valid_mock_fail_rate(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("MOCK_FAIL_RATE must be between 0 and 1")
         return value
 
 
